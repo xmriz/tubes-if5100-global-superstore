@@ -7,7 +7,7 @@ import pandas as pd
 
 PathLike = Union[str, Path]
 
-# Path proyek (folder yang berisi README.md, data/, src/, dll)
+# Root project: folder yang berisi README.md, data/, src/, dll.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = PROJECT_ROOT / "data"
 
@@ -22,12 +22,11 @@ def get_project_root() -> Path:
 def get_data_path(kind: str = "raw") -> Path:
     """
     Return path ke folder data.
-    kind: 'raw', 'processed', atau 'interim'
+    kind: 'raw', 'processed', atau 'interim'.
     """
     kind = kind.lower()
     if kind not in {"raw", "processed", "interim"}:
-        raise ValueError(
-            f"kind harus 'raw', 'processed', atau 'interim', bukan '{kind}'")
+        raise ValueError(f"kind harus 'raw', 'processed', atau 'interim', bukan '{kind}'")
 
     return DATA_DIR / kind
 
@@ -35,7 +34,7 @@ def get_data_path(kind: str = "raw") -> Path:
 def load_csv(path: PathLike, encoding: str = "utf-8", **read_kwargs) -> pd.DataFrame:
     """
     Load CSV dengan encoding default 'utf-8'.
-    Jika gagal (UnicodeDecodeError), otomatis coba 'latin1'.
+    Jika gagal (UnicodeDecodeError), otomatis fallback ke 'latin1'.
     """
     path = Path(path)
     if not path.is_absolute():
@@ -50,9 +49,7 @@ def load_csv(path: PathLike, encoding: str = "utf-8", **read_kwargs) -> pd.DataF
     try:
         df = pd.read_csv(path, **default_kwargs)
     except UnicodeDecodeError:
-        # fallback ke latin1
-        print(
-            f"[WARN] Gagal decode dengan {encoding}, mencoba ulang dengan 'latin1'...")
+        print(f"[WARN] Gagal decode dengan {encoding}, mencoba ulang dengan 'latin1'...")
         default_kwargs["encoding"] = "latin1"
         df = pd.read_csv(path, **default_kwargs)
 

@@ -30,8 +30,7 @@ def plot_sales_by_category(df: pd.DataFrame, save_path: Optional[str] = None) ->
     Barplot: total sales per category.
     """
     if "category" not in df.columns or "sales" not in df.columns:
-        raise ValueError(
-            "Kolom 'category' atau 'sales' tidak ditemukan di DataFrame.")
+        raise ValueError("Kolom 'category' atau 'sales' tidak ditemukan di DataFrame.")
 
     data = (
         df.groupby("category")["sales"]
@@ -57,8 +56,7 @@ def plot_sales_trend_by_month(df: pd.DataFrame, save_path: Optional[str] = None)
     Line plot: total sales per bulan berdasarkan order_date.
     """
     if "order_date" not in df.columns or "sales" not in df.columns:
-        raise ValueError(
-            "Butuh kolom 'order_date' dan 'sales' untuk plot tren.")
+        raise ValueError("Butuh kolom 'order_date' dan 'sales' untuk plot tren.")
 
     data = (
         df.set_index("order_date")
@@ -82,29 +80,23 @@ def plot_sales_trend_by_month(df: pd.DataFrame, save_path: Optional[str] = None)
 def plot_discount_vs_profit(df: pd.DataFrame, save_path: Optional[str] = None) -> plt.Axes:
     """
     Scatter + trend line: Discount vs Profit.
-    Hanya untuk keperluan visual, profit di-clip ke quantile 1%–99%
-    supaya outlier ekstrem tidak mendominasi plot.
+    Untuk visual saja, profit di-clip ke quantile 1%–99% agar outlier ekstrem tidak mendominasi plot.
     """
     if "discount" not in df.columns or "profit" not in df.columns:
-        raise ValueError(
-            "Butuh kolom 'discount' dan 'profit' untuk scatter plot.")
+        raise ValueError("Butuh kolom 'discount' dan 'profit' untuk scatter plot.")
 
-    # Ambil hanya kolom yang diperlukan & buang NA
     plot_df = df[["discount", "profit"]].dropna().copy()
 
-    # Clip outlier profit di luar 1%–99% quantile (untuk visual saja)
+    # Clip outlier profit
     q_low, q_high = plot_df["profit"].quantile([0.01, 0.99])
-    plot_df = plot_df[(plot_df["profit"] >= q_low) &
-                      (plot_df["profit"] <= q_high)]
+    plot_df = plot_df[(plot_df["profit"] >= q_low) & (plot_df["profit"] <= q_high)]
 
     fig, ax = plt.subplots(figsize=DEFAULT_FIGSIZE)
-
-    # Scatter + garis tren
     sns.regplot(
         data=plot_df,
         x="discount",
         y="profit",
-        scatter_kws={"alpha": 0.2, "s": 10},   # titik lebih kecil & transparan
+        scatter_kws={"alpha": 0.2, "s": 10},
         line_kws={"color": "red"},
         ax=ax,
     )
@@ -128,8 +120,8 @@ def plot_correlation_heatmap(df: pd.DataFrame, save_path: Optional[str] = None) 
     fig, ax = plt.subplots(figsize=(10, 8))
     sns.heatmap(
         corr,
-        annot=True,        # tampilkan angka
-        fmt=".2f",         # dua angka di belakang koma
+        annot=True,
+        fmt=".2f",
         cmap="coolwarm",
         vmin=-1,
         vmax=1,
