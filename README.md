@@ -93,7 +93,7 @@ Buka `notebooks/02_modeling.ipynb`, di bagian paling atas sudah ada cell:
 Setelah itu bisa lanjut:
 
 * `train_test_split`
-* Latih model (misal: Logistic Regression, Random Forest)
+* Latih model (misal: Logistic Regression, Random Forest, ensemble, dll.)
 * Hitung metrik (Accuracy, Precision, Recall, F1, dll.)
 
 ---
