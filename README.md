@@ -3,107 +3,284 @@
 Repo ini dipakai untuk Tugas Besar IF5100 dengan dataset **Global Superstore**.
 
 Peran tim:
-- 👤 **Orang 1 – Data Analyst** (repo & kode ini)
-- 👤 Orang 2 – Machine Learning Engineer
-- 👤 Orang 3 – Project Manager & Reporter
+
+* 👤 **Orang 1 – Data Analyst** → struktur repo, data preparation, EDA, visualisasi
+* 👤 **Orang 2 – Machine Learning Engineer** → modelling, evaluasi model, interpretasi hasil
+* 👤 **Orang 3 – Project Manager & Reporter** → koordinasi, laporan, slide, dan video
 
 ---
 
-## 1. Struktur Singkat
+## 1. Struktur Singkat Repo
 
 ```text
 data/
   raw/        -> Global_Superstore2.csv (data mentah)
   processed/  -> 
-    global_superstore_clean.csv (data bersih)
-    global_superstore_model_ready.csv (data siap modelling)
+    global_superstore_clean.csv        (data bersih)
+    global_superstore_model_ready.csv  (data siap modelling, sudah di-encode)
+
 notebooks/
-  01_data_prep_eda_viz.ipynb  -> kerjaan Orang 1
-  02_modeling.ipynb           -> untuk modelling (Orang 2)
+  01_data_prep_eda_viz.ipynb  -> kerjaan Orang 1 (sudah terisi untuk data prep & EDA)
+  02_modeling.ipynb           -> untuk modelling (diisi Orang 2)
+
 src/
-  utils/io_utils.py
-  data_prep/clean_global_superstore.py
-  eda/eda_utils.py
-reports/figures/              -> gambar-gambar visualisasi
+  utils/
+    io_utils.py                    -> helper untuk load/save data
+  data_prep/
+    clean_global_superstore.py     -> script cleaning + feature engineering
+  eda/
+    eda_utils.py                   -> fungsi EDA & plotting (dipakai di notebook)
+
+reports/
+  figures/                         -> gambar-gambar visualisasi (untuk laporan & slide)
+````
+
+Orang 2 dan Orang 3 cukup fokus ke `data/processed/`, `notebooks/`, dan `reports/`.
+
+---
+
+## 2. Yang Sudah Dikerjakan Orang 1 (Data Analyst)
+
+Semua logic data prep dan EDA utama ada di:
+
+* `notebooks/01_data_prep_eda_viz.ipynb`
+* `src/data_prep/clean_global_superstore.py`
+* `src/eda/eda_utils.py`
+
+### 2.1 Data Preparation
+
+Langkah yang sudah dilakukan:
+
+* Load data mentah dari `data/raw/Global_Superstore2.csv`
+
+* Cleaning:
+
+  * Standarisasi nama kolom
+  * Parse tanggal (`order_date`, `ship_date`) menjadi tipe datetime
+  * Hapus baris duplikat
+  * Tangani missing values:
+
+    * Baris dengan NA di `sales`, `quantity`, `profit`, `discount` di-drop
+  * Drop kolom `postal_code` (banyak NA dan lokasi sudah tercakup di kolom lain)
+
+* Tambah fitur (feature engineering):
+
+  * `order_year`, `order_month`, `order_quarter`
+  * `shipping_days` (selisih hari antara `ship_date` dan `order_date`)
+  * `profit_margin = profit / sales`
+  * `sales_per_quantity = sales / quantity`
+
+* Buat **target klasifikasi**:
+
+  * `is_profitable = 1` jika `profit > 0`, else `0`
+
+* Output:
+
+  * Hasil cleaning disimpan di:
+    `data/processed/global_superstore_clean.csv`
+
+### 2.2 EDA & Visualisasi
+
+Explorasi yang sudah dilakukan di `01_data_prep_eda_viz.ipynb`:
+
+* Info awal dataset:
+
+  * `df.shape`, `df.info()`, `df.describe()`
+  * Cek nilai unik dan missing values per kolom
+
+* Plot utama yang sudah dihasilkan:
+
+  * Total `sales` per **category**
+  * `sales` dan `profit` untuk Top 10 **sub_category**
+  * **Monthly sales trend** (agregasi per bulan)
+  * **Discount vs profit** (scatter plot + trend line sederhana)
+  * Satu plot interaktif Plotly: monthly sales trend
+
+* Semua gambar statis disimpan ke folder:
+
+  * `reports/figures/`
+
+Orang 3 bisa langsung pakai gambar ini untuk laporan dan slide, tanpa perlu run ulang.
+
+### 2.3 Dataset Siap Modelling
+
+Fungsi `encode_categoricals_for_model(df_clean)` di `src/data_prep/clean_global_superstore.py` menghasilkan dataset final untuk modelling:
+
+* Output final untuk modelling:
+
+  * `data/processed/global_superstore_model_ready.csv`
+    → **file ini yang dipakai Orang 2 untuk seluruh eksperimen model**
+
+Ringkasan fitur di `global_superstore_model_ready.csv`:
+
+* **Target:**
+
+  * `is_profitable` (1 = order untung, 0 = tidak untung)
+
+* **Fitur numerik:**
+
+  * `sales`, `quantity`, `discount`, `shipping_cost`
+  * `order_year`, `order_month`, `order_quarter`
+  * `shipping_days`, `sales_per_quantity`
+  * `profit_margin` (boleh dipakai atau dibuang sesuai kebutuhan model)
+
+* **Fitur kategorikal yang sudah di-encode:**
+
+  * `order_priority` → ordinal encoding (Low < Medium < High < Critical)
+  * `ship_mode`, `segment`, `region`, `category` → one-hot encoding
+  * Kolom one-hot biasanya bernama `ship_mode_*`, `segment_*`, dst.
+
+---
+
+## 3. Petunjuk untuk Orang 2 – Machine Learning Engineer
+
+File utama untuk modelling:
+
+* `notebooks/02_modeling.ipynb`
+
+### 3.1 Load Dataset Modelling
+
+Contoh kode awal yang bisa langsung dipakai:
+
+```python
+import pandas as pd
+
+df_model = pd.read_csv("data/processed/global_superstore_model_ready.csv")
+TARGET_COL = "is_profitable"
+
+X = df_model.drop(columns=[TARGET_COL])
+y = df_model[TARGET_COL]
 ```
 
----
+Split train–test:
 
-## 2. Yang Sudah Dikerjakan Orang 1
+```python
+from sklearn.model_selection import train_test_split
 
-Di `01_data_prep_eda_viz.ipynb` dan `src/data_prep/clean_global_superstore.py`:
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y,
+    test_size=0.2,
+    random_state=42,
+    stratify=y
+)
+```
 
-* **Data Prep**
+### 3.2 Saran Alur Kerja Model
 
-  * Load data mentah dari `data/raw/Global_Superstore2.csv`
-  * Bersihkan:
+Minimal lakukan:
 
-    * standar nama kolom
-    * parse tanggal (`order_date`, `ship_date`)
-    * hapus duplikat
-    * handle missing (baris dengan NA di `sales`, `quantity`, `profit`, `discount` di-drop)
-    * drop `postal_code` (banyak NA, lokasi sudah terwakili kolom lain)
-  * Tambah fitur:
+1. Cek distribusi label `is_profitable` (imbalance atau tidak)
 
-    * `order_year`, `order_month`, `order_quarter`
-    * `shipping_days` (selisih ship–order)
-    * `profit_margin`, `sales_per_quantity`
-  * Buat **target**:
+2. Latih beberapa model baseline:
 
-    * `is_profitable = 1` jika `profit > 0`, else 0
-  * Simpan ke: `data/processed/global_superstore_clean.csv`
+   * Logistic Regression
+   * Decision Tree Classifier
+   * Random Forest Classifier
+   * Ensemble Models
 
-* **EDA & Visualisasi**
+3. Evaluasi dengan metrik:
 
-  * `df.shape`, `df.info()`, `df.describe()`, nilai unik, dan missing
-  * Plot:
+   * Accuracy
+   * Precision, Recall, F1-score
+   * Confusion matrix
 
-    * Total sales per **category**
-    * Sales & profit Top 10 **sub_category**
-    * **Monthly sales trend**
-    * **Discount vs profit** (scatter + trend line)
-    * 1 plot interaktif Plotly: monthly sales trend
-  * Gambar disimpan di `reports/figures/`
+4. Simpan hasil penting:
 
-* **Dataset untuk Modelling**
+   * Tabel ringkasan metrik per model
+   * Confusion matrix (bisa simpan gambar ke `reports/figures/`)
+   * Kalau sempat, feature importance (dari Tree/Random Forest)
 
-  * Fungsi `encode_categoricals_for_model(df_clean)` menyiapkan data untuk prediksi `is_profitable`:
+### 3.3 Output yang Diharapkan dari Orang 2
 
-    * Drop ID & kolom bocor (`profit`, `profit_margin`) dan kolom high-cardinality (city, state, country, market, sub_category, tanggal mentah).
-    * Fitur numerik: `sales`, `quantity`, `discount`, `shipping_cost`, `order_year`, `order_month`, `order_quarter`, `shipping_days`, `sales_per_quantity`
-    * Fitur kategorikal:
+* Notebook `02_modeling.ipynb` yang rapi dengan:
 
-      * `order_priority` → ordinal (Low<Medium<High<Critical)
-      * `ship_mode`, `segment`, `region`, `category` → one-hot
-    * Hasil akhir: semua fitur numerik + `is_profitable` sebagai target.
+  * Penjelasan singkat tiap langkah
+  * Kode training dan evaluasi beberapa model
+  * Tabel ringkasan metrik
 
----
+* Gambar:
 
-## 3. Petunjuk untuk Orang 2 (Modelling)
+  * Confusion matrix dan plot lain (jika ada) disimpan ke
+    `reports/figures/` dengan nama yang jelas
+    misal: `cm_logreg.png`, `cm_rf.png`, dll.
 
-Buka `notebooks/02_modeling.ipynb`, di bagian paling atas sudah ada cell:
-
-* Load `df_clean` (atau generate kalau belum ada)
-* Panggil `encode_categoricals_for_model(df_clean)`
-* Siapkan:
-
-  * `X` = fitur
-  * `y` = `is_profitable`
-
-Setelah itu bisa lanjut:
-
-* `train_test_split`, normalisasi/standardisasi (jika perlu)
-* Latih model (misal: Logistic Regression, Random Forest, ensemble, dll.)
-* Hitung metrik (Accuracy, Precision, Recall, F1, dll.)
+Orang 3 akan pakai metrik dan gambar ini untuk bagian hasil modelling di laporan dan slide.
 
 ---
 
-## 4. Petunjuk untuk Orang 3 (Laporan & Video)
+## 4. Petunjuk untuk Orang 3 – Project Manager & Reporter
 
-Dari kerjaan Orang 1, yang bisa dipakai:
+Fokus utama Orang 3:
 
-* Deskripsi dataset (jumlah baris/kolom, sumber data)
-* Langkah Data Preparation (ringkas seperti di atas)
-* Penjelasan target `is_profitable`
-* Penjelasan singkat fitur yang dipakai modelling
-* Gambar-gambar di `reports/figures/` untuk dimasukkan ke laporan & slide
+* Menggabungkan hasil kerja Orang 1 dan Orang 2 menjadi:
+
+  * Laporan tertulis
+  * Slide presentasi
+  * Script atau poin penting untuk video
+
+### 4.1 Bahan dari Orang 1 (Data Prep & EDA)
+
+Dari `01_data_prep_eda_viz.ipynb` dan `reports/figures/`:
+
+* Deskripsi dataset:
+
+  * Sumber (Global Superstore)
+  * Jumlah baris dan kolom
+  * Contoh kolom penting
+
+* Langkah Data Preparation:
+
+  * Cleaning apa saja yang dilakukan
+  * Alasan membuang `postal_code`
+  * Penjelasan pembuatan fitur baru
+  * Penjelasan kenapa `is_profitable` dipakai sebagai target
+
+* Visualisasi utama:
+
+  * Perbandingan sales dan profit antar kategori
+  * Tren penjualan bulanan
+  * Hubungan discount dan profit
+
+Semua gambar sudah ada di `reports/figures/`.
+
+### 4.2 Bahan dari Orang 2 (Modelling)
+
+Dari `02_modeling.ipynb`:
+
+* Model apa saja yang dicoba
+* Singkat tentang cara kerja model (garis besar saja)
+* Tabel perbandingan metrik (accuracy, precision, recall, F1)
+* Confusion matrix dan interpretasinya
+* Model mana yang akhirnya dipilih dan kenapa
+
+### 4.3 Hal yang Perlu Ditekankan di Laporan dan Video
+
+* **Cerita alur proyek**:
+
+  1. Masalah: ingin tahu faktor apa yang membuat sebuah order menguntungkan
+  2. Data: Global Superstore, penjelasan singkat
+  3. Data Preparation dan EDA (kerjaan Orang 1)
+  4. Modelling dan hasilnya (kerjaan Orang 2)
+  5. Kesimpulan dan insight bisnis
+
+* **Hubungkan angka dengan bahasa awam**:
+
+  * Contoh: “Model terbaik punya akurasi X persen, artinya dari 100 order, sekitar X order diprediksi dengan benar apakah menguntungkan atau tidak.”
+
+* **Pastikan semua gambar di laporan dan slide** diberi:
+
+  * Judul yang jelas
+  * Caption singkat
+  * Sumber: “diolah dari Global Superstore”
+
+---
+
+## 5. Ringkasannya
+
+* Orang 1: sudah menyiapkan **data bersih + dataset siap modelling + EDA + visualisasi**.
+* Orang 2: tinggal fokus ke **`02_modeling.ipynb`** untuk melatih dan evaluasi model menggunakan `global_superstore_model_ready.csv`.
+* Orang 3: menyusun **laporan, slide, dan script video** dengan memanfaatkan:
+
+  * Gambar di `reports/figures/`
+  * Ringkasan langkah data prep dan EDA
+  * Hasil dan interpretasi model dari Orang 2.
