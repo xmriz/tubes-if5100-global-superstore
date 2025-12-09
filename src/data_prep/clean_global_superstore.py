@@ -196,25 +196,26 @@ def create_profit_flag(df: pd.DataFrame) -> pd.DataFrame:
 
 # ---------- Encoding untuk modelling ----------
 
-def encode_categoricals_for_model(df: pd.DataFrame) -> pd.DataFrame:
+def encode_categoricals_and_process_for_model(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Siapkan dataset untuk modelling klasifikasi is_profitable:
+    Siapkan dataset untuk modelling klasifikasi is_profitable dengan jumlah fitur yang wajar.
 
-    - Drop kolom ID & kolom yang menyebabkan leakage:
+    - Drop kolom ID, lokasi sangat detail, tanggal mentah, dan kolom leakage:
       ['row_id', 'order_id', 'customer_id', 'customer_name',
-       'product_id', 'product_name', 'profit', 'profit_margin']
+       'product_id', 'product_name', 'profit', 'profit_margin',
+       'order_date', 'ship_date', 'city', 'state', 'country']
 
-    - Encode ordinal untuk 'order_priority':
-        Low < Medium < High < Critical
+    - Gunakan fitur kategorikal yang lebih ringkas:
+        ship_mode, segment, market, region, category, sub_category, order_priority
 
-    - One-hot encoding (get_dummies) untuk semua kolom object/category
-      lainnya (drop_first=True) sehingga hasilnya full numerik.
+      * order_priority → ordinal (Low<Medium<High<Critical)
+      * lainnya → one-hot (get_dummies, drop_first=True)
 
-    Kolom target 'is_profitable' tetap dipertahankan.
+    - Kolom target 'is_profitable' tetap dipertahankan.
     """
     df_model = df.copy()
 
-    # --- Drop kolom non-fitur / leaky ---
+    # --- 1. Drop kolom non-fitur / leaky / high-cardinality ---
     drop_cols = [
         "row_id",
         "order_id",
@@ -224,51 +225,53 @@ def encode_categoricals_for_model(df: pd.DataFrame) -> pd.DataFrame:
         "product_name",
         "profit",          # leakage
         "profit_margin",   # leakage
+        "order_date",      # sudah diwakili order_year, order_month, order_quarter
+        "ship_date",       # sudah diwakili shipping_days
+        "city",            # high cardinality
+        "state",           # high cardinality
+        "country",         # high cardinality
     ]
     drop_existing = [c for c in drop_cols if c in df_model.columns]
     if drop_existing:
-        print(f"[INFO] Drop kolom non-fitur / leaky: {drop_existing}")
+        print(f"[INFO] Drop kolom non-fitur / leaky / high-cardinality: {drop_existing}")
         df_model = df_model.drop(columns=drop_existing)
 
-    # --- Identifikasi fitur numerik & kategorikal SEBELUM encoding ---
+    # --- 2. Identifikasi fitur numerik & kategorikal SEBELUM encoding ---
     all_numeric = df_model.select_dtypes(include=["number"]).columns.tolist()
-    # target sebaiknya tidak dianggap fitur
     numeric_feature_cols = [c for c in all_numeric if c != "is_profitable"]
 
-    cat_feature_cols = df_model.select_dtypes(
-        include=["object", "category"]).columns.tolist()
+    # Kita hanya pakai subset kategorikal yang ringkas
+    cat_candidates = ["ship_mode", "segment", "market", "region", "category", "sub_category", "order_priority"]
+    cat_feature_cols = [c for c in cat_candidates if c in df_model.columns]
 
     print("\n[INFO] Ringkasan fitur sebelum encoding:")
-    print(f"  - Target        : 'is_profitable'")
-    print(f"  - Fitur numerik : {numeric_feature_cols}")
+    print(f"  - Target           : 'is_profitable'")
+    print(f"  - Fitur numerik    : {numeric_feature_cols}")
     print(f"  - Fitur kategorikal: {cat_feature_cols}")
 
-    # --- Ordinal encoding untuk order_priority ---
+    # --- 3. Ordinal encoding untuk order_priority ---
     if "order_priority" in df_model.columns:
-        print(
-            "\n[INFO] Ordinal encoding untuk 'order_priority' (Low<Medium<High<Critical)")
+        print("\n[INFO] Ordinal encoding untuk 'order_priority' (Low<Medium<High<Critical)")
         priority_map = {"Low": 0, "Medium": 1, "High": 2, "Critical": 3}
 
         raw = df_model["order_priority"].astype(str).str.strip().str.title()
         df_model["order_priority"] = raw.map(priority_map)
 
         median_rank = int(df_model["order_priority"].median())
-        df_model["order_priority"] = df_model["order_priority"].fillna(
-            median_rank).astype("int32")
+        df_model["order_priority"] = df_model["order_priority"].fillna(median_rank).astype("int32")
 
-    # --- One-hot encoding untuk kategorikal lain ---
-    cat_cols_for_dummies = df_model.select_dtypes(
-        include=["object", "category"]).columns.tolist()
+    # --- 4. One-hot encoding untuk kategorikal lain ---
+    cat_cols_for_dummies = [c for c in cat_feature_cols if c != "order_priority"]
+
     if cat_cols_for_dummies:
-        print(
-            f"\n[INFO] One-hot encoding (get_dummies, drop_first=True) untuk: {cat_cols_for_dummies}")
-        df_model = pd.get_dummies(
-            df_model, columns=cat_cols_for_dummies, drop_first=True)
+        print(f"\n[INFO] One-hot encoding (get_dummies, drop_first=True) untuk: {cat_cols_for_dummies}")
+        df_model = pd.get_dummies(df_model, columns=cat_cols_for_dummies, drop_first=True)
     else:
-        print(
-            "\n[INFO] Tidak ada kolom kategorikal lain untuk di-encode dengan one-hot.")
+        print("\n[INFO] Tidak ada kolom kategorikal lain untuk di-encode dengan one-hot.")
 
+    print(f"\n[INFO] Shape akhir df_model (setelah encoding): {df_model.shape}")
     return df_model
+
 
 
 # ---------- Pipeline utama & saving ----------
