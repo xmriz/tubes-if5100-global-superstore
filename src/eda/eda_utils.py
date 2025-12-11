@@ -6,6 +6,8 @@ from typing import Optional
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+import numpy as np
+import scipy.stats as ss
 
 from src.utils.io_utils import get_project_root
 
@@ -134,3 +136,81 @@ def plot_correlation_heatmap(df: pd.DataFrame, save_path: Optional[str] = None) 
     fig.tight_layout()
     _maybe_save(fig, save_path)
     return ax
+
+
+def plot_correlation_target(df: pd.DataFrame, target_col: str, save_path: Optional[str] = None) -> plt.Axes:
+    """
+    Heatmap korelasi untuk kolom numerik (dengan nilai korelasi) dengan fitur target.
+    """
+    numeric_cols = df.select_dtypes(include=["number"]).columns
+    corr = df[numeric_cols].corr()
+
+    sorted_corr = corr[[target_col]].sort_values(by=target_col, ascending=False)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    sns.heatmap(
+        sorted_corr,
+        annot=True,
+        fmt=".2f",
+        cmap="coolwarm",
+        vmin=-1,
+        vmax=1,
+        center=0,
+        ax=ax,
+        cbar_kws={"shrink": 0.8},
+    )
+    ax.set_title(f"Correlation Heatmap (Numeric Features) to Target: {target_col}")
+
+    fig.tight_layout()
+    _maybe_save(fig, save_path)
+    return ax
+
+
+def plot_target_cramers(df: pd.DataFrame, target: str = 'is_profitable', categorical_cols: Optional[list] = None, save_path: Optional[str] = None) -> plt.Axes:
+    """
+    Barplot: Cramér's V antara setiap fitur kategorikal dengan target.
+    """
+    if categorical_cols is None:
+        categorical_cols = ['ship_mode', 'segment', 'market', 'region', 'category', 'sub_category', 'order_priority', 'country']
+
+    if target not in df.columns or any(col not in df.columns for col in categorical_cols):
+        raise ValueError("Kolom target atau fitur kategorikal tidak ditemukan di DataFrame.")
+
+    correlations = {}
+    for col in categorical_cols:
+        score = cramers_v(df[col], df[target])
+        correlations[col] = score
+
+    corr_series = pd.Series(correlations).sort_values(ascending=False)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    sns.barplot(x=corr_series.values, y=corr_series.index, hue=corr_series.values, palette='viridis', ax=ax)
+    ax.set_title("Cramér's V Correlation with Target (is_profitable)")
+    ax.set_xlabel("Cramér's V Score")
+    ax.set_xlim(0, 1)
+    
+    for i, v in enumerate(corr_series.values):
+        ax.text(v + 0.01, i, f"{v:.3f}", va='center', fontweight='bold')
+
+    fig.tight_layout()
+    _maybe_save(fig, save_path)
+    return ax
+
+
+def cramers_v(x, y):
+    """
+    Fungsi Cramér's V untuk hitung korelasi kolom kategorikal.
+    """
+    confusion_matrix = pd.crosstab(x, y)
+    chi2 = ss.chi2_contingency(confusion_matrix)[0]
+    n = confusion_matrix.sum().sum()
+    phi2 = chi2 / n
+    r, k = confusion_matrix.shape
+    phi2corr = max(0, phi2 - ((k-1)*(r-1))/(n-1))
+    rcorr = r - ((r-1)**2)/(n-1)
+    kcorr = k - ((k-1)**2)/(n-1)
+    
+    denominator = min((kcorr-1), (rcorr-1))
+    if denominator == 0:
+        return 0
+    return np.sqrt(phi2corr / denominator)
